@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>仓库库位登记</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --blue:#2563eb;
+    --blue-dark:#1d4ed8;
+    --green:#16a34a;
+    --red:#dc2626;
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --border:#e5e7eb;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  #app{max-width:640px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;
+    padding-bottom:76px;}
+  header.topbar{position:sticky;top:0;z-index:10;background:var(--blue);color:#fff;
+    padding:14px 16px;display:flex;align-items:center;justify-content:space-between;}
+  header.topbar h1{font-size:18px;margin:0;font-weight:600;}
+  header.topbar .status{font-size:12px;opacity:.9;display:flex;align-items:center;gap:5px;cursor:pointer;}
+  .dot{width:8px;height:8px;border-radius:50%;background:#9ca3af;display:inline-block;}
+  .dot.on{background:#4ade80;}
+  .dot.off{background:#fbbf24;}
+  main{flex:1;padding:14px;}
+  .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(0,0,0,.05);border:1px solid var(--border);}
+  .card h2{font-size:15px;margin:0 0 12px;color:var(--text);}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;}
+  input[type=text],input[type=number],select,textarea{
+    width:100%;padding:11px 12px;font-size:16px;border:1px solid var(--border);
+    border-radius:10px;background:#fafafa;color:var(--text);}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);background:#fff;}
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+  button{cursor:pointer;border:none;border-radius:10px;font-size:15px;font-weight:600;
+    padding:12px 16px;}
+  .btn-primary{background:var(--blue);color:#fff;width:100%;margin-top:14px;}
+  .btn-primary:active{background:var(--blue-dark);}
+  .btn-in{background:var(--green);color:#fff;}
+  .btn-out{background:var(--red);color:#fff;}
+  .btn-ghost{background:#eef0f3;color:var(--text);}
+  .btn-sm{padding:7px 12px;font-size:13px;border-radius:8px;}
+  .btn-in.full,.btn-out.full{width:100%;margin-top:14px;}
+  .quick-qty{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  .quick-qty button{flex:1;min-width:50px;background:#eef0f3;color:var(--text);padding:8px;font-size:14px;}
+  .quick-qty button.active{background:var(--blue);color:#fff;}
+  .day-group{border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+  .day-group summary{list-style:none;cursor:pointer;padding:10px 12px;display:flex;justify-content:space-between;
+    align-items:center;background:#f9fafb;font-size:13px;}
+  .day-group summary::-webkit-details-marker{display:none;}
+  .day-group summary .date{font-weight:700;color:var(--text);}
+  .day-group summary .sub{color:var(--muted);}
+  .day-group summary .sub b.in{color:#15803d;}
+  .day-group summary .sub b.out{color:#b91c1c;}
+  .day-group table{margin:0;}
+  .day-group .inner{padding:0 10px 8px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-weight:500;font-size:12px;}
+  tr:last-child td{border-bottom:none;}
+  .tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600;}
+  .tag-in{background:#dcfce7;color:#15803d;}
+  .tag-out{background:#fee2e2;color:#b91c1c;}
+  .muted{color:var(--muted);font-size:13px;}
+  .empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:14px;}
+  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);
+    display:flex;max-width:640px;margin:0 auto;z-index:10;}
+  nav.tabbar button{flex:1;background:none;border-radius:0;padding:10px 4px 8px;font-size:11px;
+    color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:500;}
+  nav.tabbar button .ic{font-size:20px;}
+  nav.tabbar button.active{color:var(--blue);}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:#1f2937;color:#fff;
+    padding:10px 18px;border-radius:10px;font-size:14px;z-index:50;opacity:0;transition:opacity .25s;
+    pointer-events:none;max-width:90%;text-align:center;}
+  .toast.show{opacity:1;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .search-bar{display:flex;gap:8px;margin-bottom:10px;}
+  .search-bar input{flex:1;}
+  .pill{display:inline-block;background:#eef0f3;border-radius:20px;padding:3px 10px;font-size:12px;margin:2px 4px 2px 0;}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;color:var(--muted);}
+  .kv b{color:var(--text);}
+  .setup-banner{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:10px 14px;
+    border-radius:10px;font-size:13px;margin-bottom:14px;}
+  .setup-banner a{color:#92400e;font-weight:700;}
+  select{-webkit-appearance:none;appearance:none;}
+  .footer-note{text-align:center;color:#9ca3af;font-size:11px;padding:10px 0 4px;}
+  .warn{color:#b45309;font-size:12px;margin-top:6px;}
+  .warn.bad{color:#b91c1c;}
+  input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--border);
+    border-radius:10px;background:#fafafa;}
+  .map-row{display:flex;align-items:center;gap:8px;margin:8px 0;}
+  .map-row label{margin:0;flex:0 0 90px;color:var(--text);font-size:13px;}
+  .map-row select{flex:1;}
+  .preview-wrap{overflow-x:auto;margin-top:10px;border:1px solid var(--border);border-radius:10px;}
+  .preview-wrap table{font-size:12px;white-space:nowrap;}
+  .btn-danger{background:var(--red);color:#fff;width:100%;margin-top:10px;}
+  .hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
+  .import-summary{font-size:13px;margin-top:10px;background:#f0fdf4;border:1px solid #bbf7d0;
+    color:#166534;padding:10px 12px;border-radius:10px;}
+  .import-summary.bad{background:#fef2f2;border-color:#fecaca;color:#991b1b;}
+  details.mismatch{margin-top:8px;font-size:12px;}
+  details.mismatch summary{cursor:pointer;color:var(--muted);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <h1>📦 仓库库位登记</h1>
+    <div class="status" id="statusBtn"><span class="dot" id="statusDot"></span><span id="statusText">检查中</span></div>
+  </header>
+
+  <main>
+    <div id="setupBanner" class="setup-banner" style="display:none;">
+      当前是「本地演示模式」，数据只存在这台设备的浏览器里，手机和电脑不会同步。
+      点击右上角状态可以填入 Supabase 地址来开启云端同步。
+    </div>
+
+    <!-- 查询 -->
+    <section class="view" id="view-search">
+      <div class="card">
+        <h2>🔍 查条码 / 查库位</h2>
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="输入产品条码或库位编号，如 2106311 或 01-01-10" />
+          <button class="btn-ghost btn-sm" id="searchBtn">查</button>
+        </div>
+        <div id="searchResult"></div>
+      </div>
+    </section>
+
+    <!-- 入库 -->
+    <section class="view" id="view-in">
+      <div class="card">
+        <h2>🟢 入库登记（加库存）</h2>
+        <label>产品条码 / 编号</label>
+        <input type="text" id="inBarcode" placeholder="扫码或输入条码" autocomplete="off" />
+        <div id="inBarcodeWarn" class="warn"></div>
+        <label>库位编号</label>
+        <input type="text" id="inLocation" placeholder="如 01-01-10" autocomplete="off" />
+        <label>区域</label>
+        <select id="inZone"><option value="架上" selected>架上（货架/拣货位）</option><option value="架下">架下（仓库/备货位）</option></select>
+        <label>数量</label>
+        <input type="number" id="inQty" placeholder="0" inputmode="numeric" min="0" />
+        <div class="quick-qty" id="inQuick"></div>
+        <label>备注（可选）</label>
+        <input type="text" id="inNote" placeholder="备注" />
+        <button class="btn-in full" id="inSubmit">确认入库</button>
+      </div>
+    </section>
+
+    <!-- 出库 -->
+    <section class="view" id="view-out">
+      <div class="card">
+        <h2>🔴 出库登记（移出/减库存）</h2>
+        <label>产品条码 / 编号</label>
+        <input type="text" id="outBarcode" placeholder="扫码或输入条码" autocomplete="off" />
+        <div id="outBarcodeWarn" class="warn"></div>
+        <label>库位编号</label>
+        <input type="text" id="outLocation" placeholder="如 01-01-10" autocomplete="off" />
+        <div id="outLocHint" class="muted"></div>
+        <label>区域</label>
+        <select id="outZone"><option value="架上" selected>架上（货架/拣货位）</option><option value="架下">架下（仓库/备货位）</option></select>
+        <label>数量</label>
+        <input type="number" id="outQty" placeholder="0" inputmode="numeric" min="0" />
+        <div class="quick-qty" id="outQuick"></div>
+        <label>备注（可选）</label>
+        <input type="text" id="outNote" placeholder="备注" />
+        <button class="btn-out full" id="outSubmit">确认出库</button>
+      </div>
+    </section>
+
+    <!-- 库存总览 -->
+    <section class="view" id="view-inv">
+      <div class="card">
+        <h2>📋 库存总览</h2>
+        <div class="search-bar">
+          <input type="text" id="invFilter" placeholder="按条码或库位过滤" />
+        </div>
+        <div id="invTableWrap"></div>
+      </div>
+    </section>
+
+    <!-- 历史记录 -->
+    <section class="view" id="view-history">
+      <div class="card">
+        <h2>🕘 出入库历史（按天核对）</h2>
+        <div class="search-bar">
+          <input type="text" id="histFilter" placeholder="按条码或库位过滤" />
+        </div>
+        <div class="quick-qty" id="histTypeFilter">
+          <button type="button" class="active" data-type="all">全部</button>
+          <button type="button" data-type="in">🟢入库</button>
+          <button type="button" data-type="out">🔴出库</button>
+        </div>
+        <div id="histTableWrap" style="margin-top:10px;"></div>
+      </div>
+    </section>
+
+    <!-- 工具：导入 / 盘点清空 -->
+    <section class="view" id="view-tools">
+      <div class="card">
+        <h2>📥 导入库存（盘点结果 / 初始数据 / 每周产品汇总）</h2>
+        <p class="muted">导入的表格需要包含"库位、条码、数量"三列。导入会把对应库位+条码的库存<b>直接设置</b>为表格里的数量（不是累加），适合盘点后一次性核对更新，也适合第一次把旧表格数据搬进来，或者每周导入最新的产品汇总表。为了导入几千条也能很快、不刷屏，这个批量导入不会在"记录"页留下逐条流水，导入结果只显示在下面。</p>
+        <label>这批数据属于哪个区域</label>
+        <select id="invZone">
+          <option value="架上" selected>架上（货架/拣货位，如原来的库位区块）</option>
+          <option value="架下">架下（仓库/备货位，如每周的产品汇总表）</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--text);">
+          <input type="checkbox" id="invClearZone" style="width:auto;" />
+          这份表格是该区域的完整快照，导入前先清空该区域的旧数据
+        </label>
+        <p class="muted" style="margin-top:2px;">适合每周收到新的产品汇总表时勾选：先把上一周"架下"的旧记录清掉，
+          再整表导入这一周的，这样产品挪了位置、下架了都会正确更新，不会留下过期的旧位置。
+          日常零星登记/补充数据时不用勾。</p>
+        <input type="file" id="invFile" accept=".xlsx,.xls,.csv" />
+        <div id="invMapArea"></div>
+        <div id="invPreview"></div>
+        <button class="btn-primary" id="invImportBtn" style="display:none;">确认导入库存</button>
+        <div id="invImportResult"></div>
+      </div>
+
+      <div class="card">
+        <h2>🔁 年度盘点：一键清空库存</h2>
+        <p class="muted">清空前会自动把当前所有库存数量记一笔"出库"存档到历史记录里，可以随时在"记录"页查到清空前的数据；清空后库存总览会变成空的，方便你重新盘点、逐条登记新数量（或用上面的"导入库存"一次性导入盘点结果）。</p>
+        <p class="warn bad">⚠️ 此操作会清空当前所有库位的库存数量，请确认已经不需要旧数据后再操作。需要输入清空密码才能执行，防止误触。</p>
+        <button class="btn-danger" id="resetInvBtn">🔒 清空全部库存，开始新一轮盘点</button>
+        <div id="resetResult"></div>
+      </div>
+    </section>
+
+    <div class="footer-note">仓库库位登记小程序 · 数据来自你的仓储库位表</div>
+  </main>
+
+  <nav class="tabbar">
+    <button data-view="search" class="active"><span class="ic">🔍</span>查询</button>
+    <button data-view="in"><span class="ic">🟢</span>入库</button>
+    <button data-view="out"><span class="ic">🔴</span>出库</button>
+    <button data-view="inv"><span class="ic">📋</span>库存</button>
+    <button data-view="history"><span class="ic">🕘</span>记录</button>
+    <button data-view="tools"><span class="ic">🧰</span>工具</button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   一键清空库存需要输入这个密码才能执行，防止同事手滑误触。
+   想改密码：把下面引号里的内容换掉，保存文件重新部署即可（手机电脑用的是同一个文件，改一次全部生效）。
+   ============================================================ */
+const RESET_PASSWORD = '8888';
+
+/* ============================================================
+   数据层：优先使用 Supabase 云数据库；没有配置时自动退回浏览器本地存储（演示模式）
+   ============================================================ */
+const LS_CONFIG_KEY = 'wms_config_v1';
+const LS_LOCAL_DB_KEY = 'wms_local_db_v1';
+
+function loadConfig(){
+  try{ return JSON.parse(localStorage.getItem(LS_CONFIG_KEY)) || {}; }catch(e){ return {}; }
+}
+function saveConfig(cfg){ localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(cfg)); }
+
+let config = loadConfig();
+let sb = null;
+let mode = 'local'; // 'cloud' | 'local'
+
+function initClient(){
+  if(config.url && config.key && window.supabase){
+    try{
+      sb = window.supabase.createClient(config.url, config.key);
+      mode = 'cloud';
+    }catch(e){
+      sb = null; mode = 'local';
+    }
+  } else {
+    sb = null; mode = 'local';
+  }
+}
+initClient();
+
+/* ---------- 本地演示模式存储 ---------- */
+function localDB(){
+  try{
+    const db = JSON.parse(localStorage.getItem(LS_LOCAL_DB_KEY)) || {};
+    if(!db.inventory) db.inventory = [];
+    if(!db.movements) db.movements = [];
+    if(!db.products) db.products = [];
+    if(!db.locations) db.locations = [];
+    return db;
+  }catch(e){ return {inventory:[], movements:[], products:[], locations:[]}; }
+}
+function saveLocalDB(db){ localStorage.setItem(LS_LOCAL_DB_KEY, JSON.stringify(db)); }
+
+/* 只在库位第一次出现时记下它的区域，已存在的库位不会被悄悄改区域 */
+function localEnsureLocation(db, code, zone){
+  let loc = db.locations.find(l=>l.code===code);
+  if(!loc){ loc = {code, zone: zone||'架上'}; db.locations.push(loc); }
+  return loc;
+}
+function localZoneOf(db, code){
+  const loc = db.locations.find(l=>l.code===code);
+  return loc ? loc.zone : '架上';
+}
+
+function localAdjust(location, barcode, delta, zone){
+  const db = localDB();
+  localEnsureLocation(db, location, zone);
+  localEnsureProduct(db, barcode);
+  let row = db.inventory.find(r => r.location_code===location && r.barcode===barcode);
+  if(row){ row.quantity += delta; row.updated_at = new Date().toISOString(); }
+  else{ row = {location_code:location, barcode, quantity:delta, updated_at:new Date().toISOString()}; db.inventory.push(row); }
+  saveLocalDB(db);
+  return row.quantity;
+}
+function localAddMovement(m){
+  const db = localDB();
+  m.id = (db.movements.length ? Math.max(...db.movements.map(x=>x.id)) : 0) + 1;
+  m.created_at = new Date().toISOString();
+  db.movements.unshift(m);
+  saveLocalDB(db);
+  return db;
+}
+function localSet(location, barcode, quantity, note, zone){
+  const db = localDB();
+  localEnsureLocation(db, location, zone);
+  localEnsureProduct(db, barcode);
+  let row = db.inventory.find(r => r.location_code===location && r.barcode===barcode);
+  const oldQty = row ? row.quantity : 0;
+  if(row){ row.quantity = quantity; row.updated_at = new Date().toISOString(); }
+  else{ row = {location_code:location, barcode, quantity, updated_at:new Date().toISOString()}; db.inventory.push(row); }
+  saveLocalDB(db);
+  if(quantity !== oldQty){
+    localAddMovement({type: quantity>=oldQty?'in':'out', barcode, location_code:location, quantity: Math.abs(quantity-oldQty), note: note||'导入/盘点设置'});
+  }
+  return row.quantity;
+}
+function localResetAll(note){
+  const db = localDB();
+  const ts = new Date().toISOString();
+  let nextId = (db.movements.length ? Math.max(...db.movements.map(x=>x.id)) : 0) + 1;
+  const archived = db.inventory.filter(r=>r.quantity!==0).map(r=>({
+    id: nextId++, type:'out', barcode:r.barcode, location_code:r.location_code, quantity:r.quantity,
+    note: note||'年度盘点清零', created_at: ts
+  }));
+  db.movements = archived.reverse().concat(db.movements);
+  const cnt = db.inventory.length;
+  db.inventory = [];
+  saveLocalDB(db);
+  return cnt;
+}
+/* 条码第一次出现时自动登记进产品名单（active默认true），已存在的不会被覆盖 —
+   这样"编号是否在总表里"的校验就能自动跟着你实际入库/出库/导入过的条码走，不用单独再维护一份总表 */
+function localEnsureProduct(db, barcode){
+  if(!db.products.find(p=>p.barcode===barcode)){
+    db.products.push({barcode, model:null, active:true});
+  }
+}
+function localGetProduct(barcode){
+  return localDB().products.find(p=>p.barcode===barcode) || null;
+}
+function localBulkSet(items, zone){
+  const db = localDB();
+  const uniqLocs = new Set(items.map(i=>i.location));
+  uniqLocs.forEach(code=>{
+    const existing = db.locations.find(l=>l.code===code);
+    if(existing){ existing.zone = zone||'架上'; } else { db.locations.push({code, zone: zone||'架上'}); }
+  });
+  const uniqBarcodes = new Set(items.map(i=>i.barcode));
+  uniqBarcodes.forEach(bc=> localEnsureProduct(db, bc));
+  const key = (loc,bc)=> loc+'|'+bc;
+  const idx = new Map();
+  db.inventory.forEach((r,i)=> idx.set(key(r.location_code,r.barcode), i));
+  const ts = new Date().toISOString();
+  items.forEach(it=>{
+    const k = key(it.location, it.barcode);
+    if(idx.has(k)){
+      db.inventory[idx.get(k)].quantity = it.quantity;
+      db.inventory[idx.get(k)].updated_at = ts;
+    } else {
+      idx.set(k, db.inventory.length);
+      db.inventory.push({location_code: it.location, barcode: it.barcode, quantity: it.quantity, updated_at: ts});
+    }
+  });
+  saveLocalDB(db);
+  return {count: items.length};
+}
+function localClearZone(zone){
+  const db = localDB();
+  const codes = new Set(db.locations.filter(l=>l.zone===zone).map(l=>l.code));
+  const before = db.inventory.length;
+  db.inventory = db.inventory.filter(r=>!codes.has(r.location_code));
+  const removed = before - db.inventory.length;
+  saveLocalDB(db);
+  return removed;
+}
+
+/* ============================================================
+   业务操作
+   ============================================================ */
+async function adjustInventory(location, barcode, delta, zone){
+  location = location.trim(); barcode = barcode.trim();
+  if(mode==='cloud'){
+    const { data, error } = await sb.rpc('adjust_inventory', {p_location: location, p_barcode: barcode, p_delta: delta, p_zone: zone||'架上'});
+    if(error) throw error;
+    return data;
+  }
+  return localAdjust(location, barcode, delta, zone);
+}
+
+async function recordMovement(type, barcode, location, quantity, note){
+  const m = {type, barcode: barcode.trim(), location_code: location.trim(), quantity, note: note||null, operator: null};
+  if(mode==='cloud'){
+    const { error } = await sb.from('movements').insert(m);
+    if(error) throw error;
+  } else {
+    localAddMovement(m);
+  }
+}
+
+async function stockIn(barcode, location, qty, note, zone){
+  if(!barcode || !location) throw new Error('请填写条码和库位');
+  if(!(qty>0)) throw new Error('数量必须大于0');
+  await adjustInventory(location, barcode, qty, zone);
+  await recordMovement('in', barcode, location, qty, note);
+}
+
+async function stockOut(barcode, location, qty, note, zone){
+  if(!barcode || !location) throw new Error('请填写条码和库位');
+  if(!(qty>0)) throw new Error('数量必须大于0');
+  const newQty = await adjustInventory(location, barcode, -qty, zone);
+  await recordMovement('out', barcode, location, qty, note);
+  return newQty;
+}
+
+/* 给库存行补上"架上/架下"区域信息，方便查询时分组显示 */
+function attachLocalZones(rows){
+  const db = localDB();
+  return rows.map(r=> Object.assign({}, r, {zone: localZoneOf(db, r.location_code)}));
+}
+function flattenCloudZone(rows){
+  return (rows||[]).map(r=>{
+    const zone = r.locations ? r.locations.zone : '架上';
+    const { locations, ...rest } = r;
+    return Object.assign(rest, {zone: zone||'架上'});
+  });
+}
+
+async function getInventoryByBarcode(barcode){
+  barcode = barcode.trim();
+  if(mode==='cloud'){
+    const { data, error } = await sb.from('inventory').select('*, locations(zone)').eq('barcode', barcode).order('location_code');
+    if(error) throw error;
+    return flattenCloudZone(data);
+  }
+  return attachLocalZones(localDB().inventory.filter(r=>r.barcode===barcode));
+}
+async function getInventoryByLocation(location){
+  location = location.trim();
+  if(mode==='cloud'){
+    const { data, error } = await sb.from('inventory').select('*, locations(zone)').eq('location_code', location).order('barcode');
+    if(error) throw error;
+    return flattenCloudZone(data);
+  }
+  return attachLocalZones(localDB().inventory.filter(r=>r.location_code===location));
+}
+async function listAllInventory(){
+  if(mode==='cloud'){
+    const { data, error } = await sb.from('inventory').select('*, locations(zone)').order('location_code');
+    if(error) throw error;
+    return flattenCloudZone(data);
+  }
+  return attachLocalZones(localDB().inventory.slice().sort((a,b)=> a.location_code.localeCompare(b.location_code)));
+}
+async function listMovements(limit=100){
+  if(mode==='cloud'){
+    const { data, error } = await sb.from('movements').select('*').order('created_at',{ascending:false}).limit(limit);
+    if(error) throw error;
+    return data;
+  }
+  return localDB().movements.slice(0, limit);
+}
+
+/* ---- 直接设置库存数量（导入 / 盘点用，覆盖而非累加） ---- */
+async function setInventory(location, barcode, quantity, note){
+  location = String(location).trim(); barcode = String(barcode).trim();
+  if(mode==='cloud'){
+    const { data, error } = await sb.rpc('set_inventory', {p_location: location, p_barcode: barcode, p_quantity: quantity, p_note: note||'导入/盘点设置', p_zone: zone||'架上'});
+    if(error) throw error;
+    return data;
+  }
+  return localSet(location, barcode, quantity, note, zone);
+}
+
+/* ---- 批量设置库存（Excel导入专用，一次性写入几千条也很快，不会像一条条调用那样卡）
+   items: [{location, barcode, quantity}]，直接覆盖对应库位+编号的数量，库位统一打上 zone 标签
+   （架上/架下），已存在的库位区域也会被这次导入的选择覆盖，因为是你自己明确选的区域。
+   为了速度和避免刷屏，这个批量导入不会像 setInventory 那样每条都记一笔"记录"页流水，
+   导入结果只显示在"工具"页当次的汇总里。 ---- */
+async function bulkSetInventory(items, zone, onProgress){
+  zone = zone || '架上';
+  if(mode==='cloud'){
+    const uniqLocations = [...new Set(items.map(i=>i.location))].map(code=>({code, zone}));
+    const uniqBarcodes = [...new Set(items.map(i=>i.barcode))].map(barcode=>({barcode}));
+    const chunk = (arr,size)=>{ const out=[]; for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size)); return out; };
+
+    for(const c of chunk(uniqLocations, 1000)){
+      const { error } = await sb.from('locations').upsert(c, {onConflict:'code'});
+      if(error) throw error;
+    }
+    onProgress && onProgress('正在写入产品编号...');
+    for(const c of chunk(uniqBarcodes, 1000)){
+      const { error } = await sb.from('products').upsert(c, {onConflict:'barcode', ignoreDuplicates:true});
+      if(error) throw error;
+    }
+    const invChunks = chunk(items, 500);
+    let done = 0;
+    for(const c of invChunks){
+      const payload = c.map(i=>({location_code:i.location, barcode:i.barcode, quantity:i.quantity, updated_at:new Date().toISOString()}));
+      const { error } = await sb.from('inventory').upsert(payload, {onConflict:'location_code,barcode'});
+      if(error) throw error;
+      done += c.length;
+      onProgress && onProgress(`正在写入库存 ${done}/${items.length}...`);
+    }
+    return {count: items.length};
+  }
+  return localBulkSet(items, zone);
+}
+
+/* ---- 一键清空全部库存（年度盘点） ---- */
+async function resetAllInventory(note){
+  if(mode==='cloud'){
+    const { data, error } = await sb.rpc('reset_all_inventory', {p_note: note||'年度盘点清零'});
+    if(error) throw error;
+    return data;
+  }
+  return localResetAll(note);
+}
+
+/* ---- 清空某个区域(架上/架下)的库存，导入"整表快照"前用，不影响另一个区域 ---- */
+async function clearZoneInventory(zone){
+  if(mode==='cloud'){
+    const { data, error } = await sb.rpc('clear_zone_inventory', {p_zone: zone});
+    if(error) throw error;
+    return data;
+  }
+  return localClearZone(zone);
+}
+
+/* ---- 查询单个产品是否"认识"（条码校验用） ---- */
+async function getProduct(barcode){
+  barcode = String(barcode).trim();
+  if(!barcode) return null;
+  if(mode==='cloud'){
+    const { data, error } = await sb.from('products').select('*').eq('barcode', barcode).maybeSingle();
+    if(error) return null;
+    return data;
+  }
+  return localGetProduct(barcode);
+}
+
+/* ============================================================
+   UI 逻辑
+   ============================================================ */
+const toastEl = document.getElementById('toast');
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>toastEl.classList.remove('show'), 2200);
+}
+
+function fmtTime(iso){
+  const d = new Date(iso);
+  const p = n=>String(n).padStart(2,'0');
+  return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/* ---- 状态指示 / 设置 ---- */
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const setupBanner = document.getElementById('setupBanner');
+
+function refreshStatusUI(){
+  if(mode==='cloud'){
+    statusDot.className = 'dot on';
+    statusText.textContent = '云端同步';
+    setupBanner.style.display = 'none';
+  } else {
+    statusDot.className = 'dot off';
+    statusText.textContent = '本地演示';
+    setupBanner.style.display = 'block';
+  }
+}
+refreshStatusUI();
+
+document.getElementById('statusBtn').addEventListener('click', openSetupDialog);
+
+function openSetupDialog(){
+  const url = prompt('Supabase 项目 URL（在 Supabase 后台 Settings > API 里找）：\n留空 = 使用本地演示模式', config.url||'');
+  if(url===null) return;
+  if(url.trim()===''){
+    config = {};
+    saveConfig(config);
+    initClient();
+    refreshStatusUI();
+    toast('已切换为本地演示模式');
+    renderCurrentView();
+    return;
+  }
+  const key = prompt('Supabase anon public key（同一个页面里）：', config.key||'');
+  if(key===null) return;
+  config = {url: url.trim(), key: key.trim()};
+  saveConfig(config);
+  initClient();
+  refreshStatusUI();
+  toast(mode==='cloud' ? '已连接云端数据库 ✅' : '连接失败，请检查地址和key');
+  renderCurrentView();
+}
+
+/* ---- Tab 切换 ---- */
+const views = ['search','in','out','inv','history','tools'];
+function showView(name){
+  views.forEach(v=>{
+    document.getElementById('view-'+v).classList.toggle('active', v===name);
+  });
+  document.querySelectorAll('nav.tabbar button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.view===name);
+  });
+  renderCurrentView();
+}
+document.querySelectorAll('nav.tabbar button').forEach(b=>{
+  b.addEventListener('click', ()=>showView(b.dataset.view));
+});
+function currentView(){
+  return views.find(v=>document.getElementById('view-'+v).classList.contains('active')) || 'search';
+}
+function renderCurrentView(){
+  const v = currentView();
+  if(v==='inv') renderInventory();
+  if(v==='history') renderHistory();
+}
+
+/* ---- 快捷数量按钮 ---- */
+function buildQuickQty(container, input){
+  container.innerHTML = '';
+  [1,2,5,10,20,50].forEach(n=>{
+    const b = document.createElement('button');
+    b.type='button'; b.textContent = '+'+n;
+    b.addEventListener('click', ()=>{ input.value = (parseFloat(input.value)||0) + n; });
+    container.appendChild(b);
+  });
+  const clr = document.createElement('button');
+  clr.type='button'; clr.textContent='清零';
+  clr.addEventListener('click', ()=>{ input.value=''; });
+  container.appendChild(clr);
+}
+buildQuickQty(document.getElementById('inQuick'), document.getElementById('inQty'));
+buildQuickQty(document.getElementById('outQuick'), document.getElementById('outQty'));
+
+/* ---- 条码校验：跟"以前入库/出库/导入时见过的编号"核对，提示从没见过的编号 ---- */
+async function checkBarcodeWarn(barcode, warnEl){
+  barcode = barcode.trim();
+  if(!barcode){ warnEl.textContent=''; warnEl.classList.remove('bad'); return; }
+  try{
+    const p = await getProduct(barcode);
+    if(!p){
+      warnEl.textContent = '⚠️ 这个编号之前从没登记过，请确认是否输入有误（如果确定是新产品，可以继续操作）';
+      warnEl.classList.add('bad');
+    } else if(p.active === false){
+      warnEl.textContent = '⚠️ 该编号被标记为"下架产品"';
+      warnEl.classList.add('bad');
+    } else {
+      warnEl.textContent = '';
+      warnEl.classList.remove('bad');
+    }
+  }catch(e){ /* 出错时静默忽略 */ }
+}
+const inBarcodeWarn = document.getElementById('inBarcodeWarn');
+const outBarcodeWarn = document.getElementById('outBarcodeWarn');
+document.getElementById('inBarcode').addEventListener('blur', ()=>checkBarcodeWarn(document.getElementById('inBarcode').value, inBarcodeWarn));
+document.getElementById('outBarcode').addEventListener('blur', ()=>checkBarcodeWarn(document.getElementById('outBarcode').value, outBarcodeWarn));
+
+/* ---- 入库 ---- */
+document.getElementById('inSubmit').addEventListener('click', async ()=>{
+  const barcode = document.getElementById('inBarcode').value.trim();
+  const location = document.getElementById('inLocation').value.trim();
+  const zone = document.getElementById('inZone').value;
+  const qty = parseFloat(document.getElementById('inQty').value);
+  const note = document.getElementById('inNote').value.trim();
+  const btn = document.getElementById('inSubmit');
+  try{
+    btn.disabled = true; btn.textContent = '处理中...';
+    await stockIn(barcode, location, qty, note, zone);
+    toast(`✅ 已入库 ${barcode} → ${location}（${zone}） +${qty}`);
+    document.getElementById('inBarcode').value='';
+    document.getElementById('inQty').value='';
+    document.getElementById('inNote').value='';
+    inBarcodeWarn.textContent=''; inBarcodeWarn.classList.remove('bad');
+    document.getElementById('inBarcode').focus();
+  }catch(e){
+    toast('❌ '+(e.message||'操作失败'));
+  }finally{
+    btn.disabled=false; btn.textContent='确认入库';
+  }
+});
+
+/* ---- 出库 ---- */
+const outLocHint = document.getElementById('outLocHint');
+async function updateOutHint(){
+  const barcode = document.getElementById('outBarcode').value.trim();
+  if(!barcode){ outLocHint.textContent=''; return; }
+  try{
+    const rows = await getInventoryByBarcode(barcode);
+    if(!rows.length){ outLocHint.textContent = '该条码目前没有库存记录'; return; }
+    outLocHint.innerHTML = zoneGroupedPillsHtml(rows);
+  }catch(e){ outLocHint.textContent=''; }
+}
+/* 把一批库存行按 架上/架下 分组显示成小圆角标签，架下额外标注"补货位置"提示 */
+function zoneGroupedPillsHtml(rows){
+  const onShelf = rows.filter(r=>r.zone!=='架下');
+  const reserve = rows.filter(r=>r.zone==='架下');
+  let html = '';
+  if(onShelf.length){
+    html += '架上：' + onShelf.map(r=>`<span class="pill">${escapeHtml(r.location_code)} × ${r.quantity}</span>`).join('');
+  }
+  if(reserve.length){
+    html += (onShelf.length? '<br/>':'') + '💡架下补货位置：' + reserve.map(r=>`<span class="pill">${escapeHtml(r.location_code)} × ${r.quantity}</span>`).join('');
+  }
+  if(!onShelf.length && !reserve.length) html = '暂无库存记录';
+  return html;
+}
+document.getElementById('outBarcode').addEventListener('change', updateOutHint);
+document.getElementById('outBarcode').addEventListener('blur', updateOutHint);
+
+document.getElementById('outSubmit').addEventListener('click', async ()=>{
+  const barcode = document.getElementById('outBarcode').value.trim();
+  const location = document.getElementById('outLocation').value.trim();
+  const zone = document.getElementById('outZone').value;
+  const qty = parseFloat(document.getElementById('outQty').value);
+  const note = document.getElementById('outNote').value.trim();
+  const btn = document.getElementById('outSubmit');
+  try{
+    btn.disabled = true; btn.textContent = '处理中...';
+    const newQty = await stockOut(barcode, location, qty, note, zone);
+    if(newQty < 0){
+      toast(`⚠️ 已出库，但该库位余量变为 ${newQty}（负数），请核对实际库存`);
+    } else {
+      toast(`✅ 已出库 ${barcode} ← ${location} -${qty}（剩余 ${newQty}）`);
+    }
+    document.getElementById('outBarcode').value='';
+    document.getElementById('outQty').value='';
+    document.getElementById('outNote').value='';
+    outLocHint.textContent='';
+    outBarcodeWarn.textContent=''; outBarcodeWarn.classList.remove('bad');
+    document.getElementById('outBarcode').focus();
+  }catch(e){
+    toast('❌ '+(e.message||'操作失败'));
+  }finally{
+    btn.disabled=false; btn.textContent='确认出库';
+  }
+});
+
+/* ---- 查询 ---- */
+async function doSearch(){
+  const q = document.getElementById('searchInput').value.trim();
+  const resultEl = document.getElementById('searchResult');
+  if(!q){ resultEl.innerHTML=''; return; }
+  resultEl.innerHTML = '<div class="empty">查询中...</div>';
+  try{
+    let rows = await getInventoryByBarcode(q);
+    let byWhat = '条码';
+    if(!rows.length){
+      rows = await getInventoryByLocation(q);
+      byWhat = '库位';
+    }
+    if(!rows.length){ resultEl.innerHTML = '<div class="empty">没有找到相关记录</div>'; return; }
+    const onShelf = rows.filter(r=>r.zone!=='架下');
+    const reserve = rows.filter(r=>r.zone==='架下');
+    const section = (title, list)=>{
+      if(!list.length) return '';
+      let h = `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${title}</div>`;
+      h += `<table><thead><tr><th>库位</th><th>条码</th><th>数量</th><th>更新时间</th></tr></thead><tbody>`;
+      list.forEach(r=>{
+        h += `<tr><td>${escapeHtml(r.location_code)}</td><td>${escapeHtml(r.barcode)}</td><td>${r.quantity}</td><td class="muted">${fmtTime(r.updated_at)}</td></tr>`;
+      });
+      return h + '</tbody></table>';
+    };
+    let html = section('🅰️ 架上（拣货位）', onShelf);
+    html += section(byWhat==='条码' ? '💡 架下（补货去这里拿）' : '🅱️ 架下（仓库备货位）', reserve);
+    resultEl.innerHTML = html;
+  }catch(e){
+    resultEl.innerHTML = `<div class="empty">查询出错：${e.message}</div>`;
+  }
+}
+document.getElementById('searchBtn').addEventListener('click', doSearch);
+document.getElementById('searchInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
+
+/* ---- 库存总览 ---- */
+async function renderInventory(){
+  const wrap = document.getElementById('invTableWrap');
+  wrap.innerHTML = '<div class="empty">加载中...</div>';
+  try{
+    const rows = await listAllInventory();
+    window.__invCache = rows;
+    drawInventory(rows);
+  }catch(e){
+    wrap.innerHTML = `<div class="empty">加载出错：${e.message}</div>`;
+  }
+}
+function drawInventory(rows, isFiltered){
+  const wrap = document.getElementById('invTableWrap');
+  if(!rows.length){
+    wrap.innerHTML = isFiltered
+      ? '<div class="empty">没有匹配的记录</div>'
+      : '<div class="empty">还没有任何库存记录，先去"入库"页面登记一条吧</div>';
+    return;
+  }
+  let html = `<table><thead><tr><th>库位</th><th>条码</th><th>数量</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    html += `<tr><td>${r.location_code}</td><td>${r.barcode}</td><td>${r.quantity}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+document.getElementById('invFilter').addEventListener('input', e=>{
+  const q = e.target.value.trim().toLowerCase();
+  const rows = (window.__invCache||[]).filter(r=>
+    r.barcode.toLowerCase().includes(q) || r.location_code.toLowerCase().includes(q));
+  drawInventory(rows, !!q);
+});
+
+/* ---- 历史记录（按天分组，方便每日核对） ---- */
+let histTypeFilter = 'all';
+async function renderHistory(){
+  const wrap = document.getElementById('histTableWrap');
+  wrap.innerHTML = '<div class="empty">加载中...</div>';
+  try{
+    const rows = await listMovements(1000);
+    window.__histCache = rows;
+    applyHistoryFilters();
+  }catch(e){
+    wrap.innerHTML = `<div class="empty">加载出错：${e.message}</div>`;
+  }
+}
+function dayKey(iso){
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function drawHistory(rows, isFiltered){
+  const wrap = document.getElementById('histTableWrap');
+  if(!rows.length){
+    wrap.innerHTML = isFiltered
+      ? '<div class="empty">没有匹配的记录</div>'
+      : '<div class="empty">还没有任何出入库记录</div>';
+    return;
+  }
+  // 按天分组（rows 已经是按时间新到旧排好序的）
+  const groups = [];
+  const idxByDay = new Map();
+  rows.forEach(r=>{
+    const k = dayKey(r.created_at);
+    if(!idxByDay.has(k)){ idxByDay.set(k, groups.length); groups.push({day:k, rows:[], inQty:0, outQty:0}); }
+    const g = groups[idxByDay.get(k)];
+    g.rows.push(r);
+    if(r.type==='in') g.inQty += Number(r.quantity)||0; else g.outQty += Number(r.quantity)||0;
+  });
+  let html = '';
+  groups.forEach((g, gi)=>{
+    html += `<details class="day-group" ${gi===0?'open':''}><summary>
+      <span class="date">${g.day}（${g.rows.length}条）</span>
+      <span class="sub">入库 <b class="in">+${g.inQty}</b> ／ 出库 <b class="out">-${g.outQty}</b></span>
+    </summary><div class="inner"><table><thead><tr><th>类型</th><th>条码</th><th>库位</th><th>数量</th><th>时间</th><th>备注</th></tr></thead><tbody>`;
+    g.rows.forEach(r=>{
+      const tag = r.type==='in' ? '<span class="tag tag-in">入库</span>' : '<span class="tag tag-out">出库</span>';
+      html += `<tr><td>${tag}</td><td>${escapeHtml(r.barcode)}</td><td>${escapeHtml(r.location_code)}</td><td>${r.quantity}</td><td class="muted">${fmtTime(r.created_at)}</td><td class="muted">${escapeHtml(r.note||'')}</td></tr>`;
+    });
+    html += '</tbody></table></div></details>';
+  });
+  wrap.innerHTML = html;
+}
+function applyHistoryFilters(){
+  const q = document.getElementById('histFilter').value.trim().toLowerCase();
+  let rows = window.__histCache||[];
+  if(histTypeFilter!=='all') rows = rows.filter(r=>r.type===histTypeFilter);
+  if(q) rows = rows.filter(r=> r.barcode.toLowerCase().includes(q) || r.location_code.toLowerCase().includes(q));
+  drawHistory(rows, !!(q || histTypeFilter!=='all'));
+}
+document.getElementById('histFilter').addEventListener('input', applyHistoryFilters);
+document.querySelectorAll('#histTypeFilter button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    histTypeFilter = b.dataset.type;
+    document.querySelectorAll('#histTypeFilter button').forEach(x=>x.classList.toggle('active', x===b));
+    applyHistoryFilters();
+  });
+});
+
+/* ============================================================
+   Excel / CSV 导入库存（编号名单跟着入库/出库/导入自动登记，不用单独维护）
+   ============================================================ */
+function escapeHtml(s){
+  return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function parseWorkbookFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      try{ resolve(XLSX.read(e.target.result, {type:'array'})); }
+      catch(err){ reject(new Error('文件解析失败，请确认是 Excel 或 CSV 文件')); }
+    };
+    reader.onerror = ()=>reject(new Error('文件读取失败'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+function analyzeSheet(wb){
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:''});
+  return {sheetName, rows};
+}
+function guessHeaderRowIndex(rows){
+  const keywords = ['库位','位置','编号','条码','产品','数量','件数','型号'];
+  let bestIdx = -1, bestScore = 0;
+  for(let i=0;i<Math.min(rows.length,5);i++){
+    let score = 0;
+    (rows[i]||[]).forEach(cell=>{
+      const s = String(cell??'');
+      keywords.forEach(k=>{ if(s.includes(k)) score++; });
+    });
+    if(score>bestScore){ bestScore=score; bestIdx=i; }
+  }
+  return bestScore>0 ? bestIdx : -1;
+}
+function detectColumns(rows){
+  const headerIdx = guessHeaderRowIndex(rows);
+  const maxCols = rows.slice(0, Math.min(rows.length,20)).reduce((m,r)=>Math.max(m,r.length),0);
+  const header = headerIdx>=0 ? rows[headerIdx] : [];
+  const sampleRow = rows[headerIdx>=0 ? headerIdx+1 : 0] || [];
+  const cols = [];
+  for(let i=0;i<maxCols;i++){
+    const headText = String(header[i]??'').trim();
+    const sample = String(sampleRow[i]??'').trim();
+    cols.push({idx:i, label: headText || `第${i+1}列`, sample});
+  }
+  return {headerIdx, dataStartIdx: headerIdx>=0 ? headerIdx+1 : 0, cols};
+}
+function guessColumnFor(cols, keywords){
+  for(const c of cols){ for(const k of keywords){ if(c.label.includes(k)) return c.idx; } }
+  return -1;
+}
+function fieldSelectHTML(id, label, cols, guessIdx, required){
+  let opts = `<option value="-1">${required?'（请选择）':'（不使用）'}</option>`;
+  cols.forEach(c=>{
+    const sampleTxt = c.sample ? ` — 如 ${c.sample}` : '';
+    opts += `<option value="${c.idx}" ${c.idx===guessIdx?'selected':''}>${escapeHtml(c.label+sampleTxt)}</option>`;
+  });
+  return `<div class="map-row"><label>${label}</label><select id="${id}">${opts}</select></div>`;
+}
+function renderPreviewTable(container, cols, colIdxUsed, rows, dataStartIdx, limit=5){
+  const usedCols = cols.filter(c=>colIdxUsed.includes(c.idx));
+  if(!usedCols.length){ container.innerHTML=''; return; }
+  const total = Math.max(0, rows.length - dataStartIdx);
+  let html = '<div class="preview-wrap"><table><thead><tr>';
+  usedCols.forEach(c=> html += `<th>${escapeHtml(c.label)}</th>`);
+  html += '</tr></thead><tbody>';
+  rows.slice(dataStartIdx, dataStartIdx+limit).forEach(r=>{
+    html += '<tr>' + usedCols.map(c=>`<td>${escapeHtml(r[c.idx])}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody></table></div>';
+  html += `<div class="muted" style="margin-top:6px;">共 ${total} 行数据（预览前 ${Math.min(limit,total)} 行）</div>`;
+  container.innerHTML = html;
+}
+async function listAllProductBarcodes(){
+  if(mode==='cloud'){
+    const { data, error } = await sb.from('products').select('barcode,active');
+    if(error) throw error;
+    return data;
+  }
+  return localDB().products;
+}
+
+/* ---- 库存导入（覆盖式设置数量） ---- */
+let invParsed = null;
+document.getElementById('invFile').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  const mapArea = document.getElementById('invMapArea');
+  const previewArea = document.getElementById('invPreview');
+  const importBtn = document.getElementById('invImportBtn');
+  document.getElementById('invImportResult').innerHTML = '';
+  importBtn.style.display = 'none';
+  if(!file) return;
+  mapArea.innerHTML = '<div class="muted">解析中...</div>'; previewArea.innerHTML='';
+  try{
+    const wb = await parseWorkbookFile(file);
+    const {rows} = analyzeSheet(wb);
+    const det = detectColumns(rows);
+    invParsed = {rows};
+    const locGuess = guessColumnFor(det.cols, ['库位','位置']);
+    const bcGuess = guessColumnFor(det.cols, ['编号','条码']);
+    const qtyGuess = guessColumnFor(det.cols, ['数量','件数','库存']);
+    mapArea.innerHTML =
+      `<div class="map-row"><label>数据起始行</label><input type="number" id="invDataStart" value="${det.dataStartIdx+1}" min="1" /></div>` +
+      fieldSelectHTML('invMapLocation','库位编号 *', det.cols, locGuess, true) +
+      fieldSelectHTML('invMapBarcode','产品编号 *', det.cols, bcGuess, true) +
+      fieldSelectHTML('invMapQty','数量 *', det.cols, qtyGuess, true);
+    const refreshInvPreview = ()=>{
+      const locIdx = parseInt(document.getElementById('invMapLocation').value);
+      const bcIdx = parseInt(document.getElementById('invMapBarcode').value);
+      const qtyIdx = parseInt(document.getElementById('invMapQty').value);
+      const dataStart = Math.max(0,(parseInt(document.getElementById('invDataStart').value)||1)-1);
+      const used = [locIdx, bcIdx, qtyIdx].filter(i=>i>=0);
+      renderPreviewTable(previewArea, det.cols, used, rows, dataStart);
+      importBtn.style.display = (locIdx>=0 && bcIdx>=0 && qtyIdx>=0) ? 'block' : 'none';
+    };
+    mapArea.addEventListener('change', refreshInvPreview);
+    mapArea.addEventListener('input', refreshInvPreview);
+    refreshInvPreview();
+  }catch(err){
+    mapArea.innerHTML = `<div class="warn bad">${err.message}</div>`;
+  }
+});
+document.getElementById('invImportBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('invImportBtn');
+  const resultEl = document.getElementById('invImportResult');
+  const locIdx = parseInt(document.getElementById('invMapLocation').value);
+  const bcIdx = parseInt(document.getElementById('invMapBarcode').value);
+  const qtyIdx = parseInt(document.getElementById('invMapQty').value);
+  const dataStart = Math.max(0,(parseInt(document.getElementById('invDataStart').value)||1)-1);
+  const zone = document.getElementById('invZone').value;
+  const clearFirst = document.getElementById('invClearZone').checked;
+  if(locIdx<0 || bcIdx<0 || qtyIdx<0){ toast('请先选择 库位/编号/数量 对应的列'); return; }
+  if(clearFirst && !confirm(`确定吗？这会先把"${zone}"区域现有的库存记录全部清掉，再导入这份表格的数据。\n\n"${zone==='架上'?'架下':'架上'}"区域不受影响。`)) return;
+  btn.disabled = true;
+  resultEl.innerHTML = '';
+  try{
+    const itemMap = new Map();
+    invParsed.rows.slice(dataStart).forEach(r=>{
+      const loc = String(r[locIdx]??'').trim();
+      const bc = String(r[bcIdx]??'').trim();
+      const qty = parseFloat(r[qtyIdx]);
+      if(!loc || !bc || isNaN(qty)) return;
+      itemMap.set(loc+'|'+bc, {location:loc, barcode:bc, quantity:qty}); // 同一库位+编号出现多次时，以表格里最后一行为准
+    });
+    const items = Array.from(itemMap.values());
+    if(!items.length){ toast('没有解析到有效的库存行（库位/编号/数量都要有值）'); return; }
+
+    // 导入会顺带自动登记条码，所以要在写入之前先记一份"已经见过的编号"快照，
+    // 不然导入完再查就已经全都"认识"了，永远不会提示新编号
+    let knownBefore = new Set();
+    try{
+      const products = await listAllProductBarcodes();
+      knownBefore = new Set(products.filter(p=>p.active!==false).map(p=>p.barcode));
+    }catch(err){ /* 忽略，不影响导入 */ }
+
+    let clearedCount = 0;
+    if(clearFirst){
+      btn.textContent = `正在清空"${zone}"区域旧数据...`;
+      clearedCount = await clearZoneInventory(zone);
+    }
+    btn.textContent = `导入中... 0/${items.length}`;
+    await bulkSetInventory(items, zone, msg=>{ btn.textContent = msg; });
+    const failed = 0;
+
+    let mismatchHtml = '';
+    try{
+      const unknown = Array.from(new Set(items.map(i=>i.barcode))).filter(bc=>!knownBefore.has(bc));
+      if(unknown.length && knownBefore.size){
+        mismatchHtml = `<details class="mismatch" open><summary>💡 有 ${unknown.length} 个编号是第一次出现（之前没入库/出库/导入过），点击查看</summary>` +
+          unknown.map(bc=>`<span class="pill">${escapeHtml(bc)}</span>`).join('') + '</details>';
+      }
+    }catch(err){ /* 忽略核对失败 */ }
+
+    const clearedTxt = clearFirst ? `（导入前先清空了"${zone}"区域旧数据 ${clearedCount} 条）` : '';
+    resultEl.innerHTML = `<div class="import-summary${failed?' bad':''}">✅ 导入完成：成功 ${items.length-failed} 条到"${zone}"区域${failed?`，失败 ${failed} 条`:''}。${clearedTxt}${mismatchHtml}</div>`;
+    toast('库存导入完成 ✅');
+    if(currentView()==='inv') renderInventory();
+  }catch(err){
+    resultEl.innerHTML = `<div class="import-summary bad">❌ 导入失败：${err.message}</div>`;
+  }finally{
+    btn.disabled=false; btn.textContent='确认导入库存';
+  }
+});
+
+/* ---- 一键清空（年度盘点） ---- */
+document.getElementById('resetInvBtn').addEventListener('click', async ()=>{
+  const pw = prompt('清空全部库存需要输入密码确认（防止误触）：');
+  if(pw===null) return; // 取消
+  if(pw !== RESET_PASSWORD){ toast('❌ 密码不对，已取消清空'); return; }
+  if(!confirm('密码正确。确定要清空全部库存吗？\n\n清空前会自动把当前数量存档到历史记录（"记录"页可查），但库存总览会立刻清空。')) return;
+  const btn = document.getElementById('resetInvBtn');
+  const resultEl = document.getElementById('resetResult');
+  btn.disabled = true; btn.textContent = '清空中...';
+  try{
+    const cnt = await resetAllInventory('年度盘点清零');
+    resultEl.innerHTML = `<div class="import-summary">✅ 已清空 ${cnt} 条库存记录（已存档到历史记录）。可以开始重新盘点登记了。</div>`;
+    toast('库存已清空 ✅');
+    if(currentView()==='inv') renderInventory();
+    if(currentView()==='history') renderHistory();
+  }catch(err){
+    resultEl.innerHTML = `<div class="import-summary bad">❌ 操作失败：${err.message}</div>`;
+  }finally{
+    btn.disabled = false; btn.textContent = '清空全部库存，开始新一轮盘点';
+  }
+});
+
+/* 首次渲染 */
+showView('search');
+</script>
+</body>
+</html>
