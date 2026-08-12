@@ -130,7 +130,7 @@
       <div class="card">
         <h2>🔍 查条码 / 查库位</h2>
         <div class="search-bar">
-          <input type="text" id="searchInput" placeholder="输入产品条码或库位编号，如 2106311 或 01-01-10" />
+          <input type="text" id="searchInput" placeholder="输入条码/库位的完整或部分内容，如 2219350 或 01-01-10" />
           <button class="btn-ghost btn-sm" id="searchBtn">查</button>
         </div>
         <div id="searchResult"></div>
@@ -474,6 +474,21 @@ async function getInventoryByLocation(location){
   }
   return attachLocalZones(localDB().inventory.filter(r=>r.location_code===location));
 }
+/* ---- 模糊查询：条码或库位只要"包含"你输入的内容就算匹配（不用打全条码前缀），专给"查询"页用 ---- */
+async function searchInventoryFuzzy(q){
+  q = q.trim();
+  if(!q) return [];
+  if(mode==='cloud'){
+    const { data, error } = await sb.from('inventory').select('*, locations(zone)')
+      .or(`barcode.ilike.%${q}%,location_code.ilike.%${q}%`)
+      .order('location_code');
+    if(error) throw error;
+    return flattenCloudZone(data);
+  }
+  const qLower = q.toLowerCase();
+  return attachLocalZones(localDB().inventory.filter(r=>
+    r.barcode.toLowerCase().includes(qLower) || r.location_code.toLowerCase().includes(qLower)));
+}
 async function listAllInventory(){
   if(mode==='cloud'){
     const { data, error } = await sb.from('inventory').select('*, locations(zone)').order('location_code');
@@ -778,12 +793,7 @@ async function doSearch(){
   if(!q){ resultEl.innerHTML=''; return; }
   resultEl.innerHTML = '<div class="empty">查询中...</div>';
   try{
-    let rows = await getInventoryByBarcode(q);
-    let byWhat = '条码';
-    if(!rows.length){
-      rows = await getInventoryByLocation(q);
-      byWhat = '库位';
-    }
+    const rows = await searchInventoryFuzzy(q);
     if(!rows.length){ resultEl.innerHTML = '<div class="empty">没有找到相关记录</div>'; return; }
     const onShelf = rows.filter(r=>r.zone!=='架下');
     const reserve = rows.filter(r=>r.zone==='架下');
@@ -797,7 +807,7 @@ async function doSearch(){
       return h + '</tbody></table>';
     };
     let html = section('🅰️ 架上（拣货位）', onShelf);
-    html += section(byWhat==='条码' ? '💡 架下（补货去这里拿）' : '🅱️ 架下（仓库备货位）', reserve);
+    html += section('💡 架下（补货去这里拿）', reserve);
     resultEl.innerHTML = html;
   }catch(e){
     resultEl.innerHTML = `<div class="empty">查询出错：${e.message}</div>`;
