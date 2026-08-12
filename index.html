@@ -489,26 +489,6 @@ async function searchInventoryFuzzy(q){
   return attachLocalZones(localDB().inventory.filter(r=>
     r.barcode.toLowerCase().includes(qLower) || r.location_code.toLowerCase().includes(qLower)));
 }
-
-/* 每周导入的"产品汇总"表里，架下那个数量其实是"架上+架下"的合计（不是单纯架下备货位的数量），
-   所以真正的架下数量 = 导入的原始数量 - 这个条码在架上的总数量。
-   这里对传入的行做一份"显示用"的修正拷贝：架上不变，架下的 quantity 换成扣减后的真实数量。
-   为了不漏算，架上总数会重新按条码单独查一遍完整数据，不只依赖当前这批查询结果里凑巧带到的架上行。 */
-async function adjustReserveQuantitiesForDisplay(rows){
-  const reserveBarcodes = [...new Set(rows.filter(r=>r.zone==='架下').map(r=>r.barcode))];
-  if(!reserveBarcodes.length) return rows;
-  const shelfTotals = {};
-  for(const bc of reserveBarcodes){
-    const all = await getInventoryByBarcode(bc);
-    shelfTotals[bc] = all.filter(r=>r.zone!=='架下').reduce((s,r)=>s+(Number(r.quantity)||0), 0);
-  }
-  return rows.map(r=>{
-    if(r.zone==='架下'){
-      return Object.assign({}, r, {quantity: r.quantity - (shelfTotals[r.barcode]||0)});
-    }
-    return r;
-  });
-}
 async function listAllInventory(){
   if(mode==='cloud'){
     const { data, error } = await sb.from('inventory').select('*, locations(zone)').order('location_code');
@@ -756,13 +736,13 @@ async function updateOutHint(){
   const barcode = document.getElementById('outBarcode').value.trim();
   if(!barcode){ outLocHint.textContent=''; return; }
   try{
-    let rows = await getInventoryByBarcode(barcode);
+    const rows = await getInventoryByBarcode(barcode);
     if(!rows.length){ outLocHint.textContent = '该条码目前没有库存记录'; return; }
-    rows = await adjustReserveQuantitiesForDisplay(rows);
     outLocHint.innerHTML = zoneGroupedPillsHtml(rows);
   }catch(e){ outLocHint.textContent=''; }
 }
-/* 把一批库存行按 架上/架下 分组显示成小圆角标签，架下额外标注"补货位置"提示 */
+/* 把一批库存行按 架上/架下 分组显示成小圆角标签；架下只显示库位，不显示数量
+   （产品汇总表里的数量其实是架上+架下合计，单独显示容易误导，所以架下这里只提示"去这个库位找"） */
 function zoneGroupedPillsHtml(rows){
   const onShelf = rows.filter(r=>r.zone!=='架下');
   const reserve = rows.filter(r=>r.zone==='架下');
@@ -771,7 +751,7 @@ function zoneGroupedPillsHtml(rows){
     html += '架上：' + onShelf.map(r=>`<span class="pill">${escapeHtml(r.location_code)} × ${r.quantity}</span>`).join('');
   }
   if(reserve.length){
-    html += (onShelf.length? '<br/>':'') + '💡架下：' + reserve.map(r=>`<span class="pill">${escapeHtml(r.location_code)} × ${r.quantity}</span>`).join('');
+    html += (onShelf.length? '<br/>':'') + '💡架下：' + reserve.map(r=>`<span class="pill">${escapeHtml(r.location_code)}</span>`).join('');
   }
   if(!onShelf.length && !reserve.length) html = '暂无库存记录';
   return html;
@@ -814,9 +794,8 @@ async function doSearch(){
   if(!q){ resultEl.innerHTML=''; return; }
   resultEl.innerHTML = '<div class="empty">查询中...</div>';
   try{
-    let rows = await searchInventoryFuzzy(q);
+    const rows = await searchInventoryFuzzy(q);
     if(!rows.length){ resultEl.innerHTML = '<div class="empty">没有找到相关记录</div>'; return; }
-    rows = await adjustReserveQuantitiesForDisplay(rows);
     const onShelf = rows.filter(r=>r.zone!=='架下');
     const reserve = rows.filter(r=>r.zone==='架下');
     const section = (title, list)=>{
@@ -828,8 +807,18 @@ async function doSearch(){
       });
       return h + '</tbody></table>';
     };
+    // 架下的数量其实是架上+架下合计，单独显示容易误导，这里只列库位+条码，不显示数量
+    const sectionNoQty = (title, list)=>{
+      if(!list.length) return '';
+      let h = `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${title}</div>`;
+      h += `<table><thead><tr><th>库位</th><th>条码</th></tr></thead><tbody>`;
+      list.forEach(r=>{
+        h += `<tr><td>${escapeHtml(r.location_code)}</td><td>${escapeHtml(r.barcode)}</td></tr>`;
+      });
+      return h + '</tbody></table>';
+    };
     let html = section('🅰️ 架上', onShelf);
-    html += section('💡 架下', reserve);
+    html += sectionNoQty('💡 架下', reserve);
     resultEl.innerHTML = html;
   }catch(e){
     resultEl.innerHTML = `<div class="empty">查询出错：${e.message}</div>`;
