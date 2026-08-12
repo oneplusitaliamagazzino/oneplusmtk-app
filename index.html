@@ -801,19 +801,19 @@ async function doSearch(){
     const section = (title, list)=>{
       if(!list.length) return '';
       let h = `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${title}</div>`;
-      h += `<table><thead><tr><th>库位</th><th>条码</th><th>数量</th><th>更新时间</th></tr></thead><tbody>`;
+      h += `<table><thead><tr><th>条码</th><th>数量</th><th>库位</th><th>更新时间</th></tr></thead><tbody>`;
       list.forEach(r=>{
-        h += `<tr><td>${escapeHtml(r.location_code)}</td><td>${escapeHtml(r.barcode)}</td><td>${r.quantity}</td><td class="muted">${fmtTime(r.updated_at)}</td></tr>`;
+        h += `<tr><td>${escapeHtml(r.barcode)}</td><td>${r.quantity}</td><td>${escapeHtml(r.location_code)}</td><td class="muted">${fmtTime(r.updated_at)}</td></tr>`;
       });
       return h + '</tbody></table>';
     };
-    // 架下的数量其实是架上+架下合计，单独显示容易误导，这里只列库位+条码，不显示数量
+    // 架下的数量其实是架上+架下合计，单独显示容易误导，这里只列条码+库位，不显示数量
     const sectionNoQty = (title, list)=>{
       if(!list.length) return '';
       let h = `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${title}</div>`;
-      h += `<table><thead><tr><th>库位</th><th>条码</th></tr></thead><tbody>`;
+      h += `<table><thead><tr><th>条码</th><th>库位</th></tr></thead><tbody>`;
       list.forEach(r=>{
-        h += `<tr><td>${escapeHtml(r.location_code)}</td><td>${escapeHtml(r.barcode)}</td></tr>`;
+        h += `<tr><td>${escapeHtml(r.barcode)}</td><td>${escapeHtml(r.location_code)}</td></tr>`;
       });
       return h + '</tbody></table>';
     };
