@@ -741,8 +741,8 @@ async function updateOutHint(){
     outLocHint.innerHTML = zoneGroupedPillsHtml(rows);
   }catch(e){ outLocHint.textContent=''; }
 }
-/* 把一批库存行按 架上/架下 分组显示成小圆角标签；架下只显示库位，不显示数量
-   （产品汇总表里的数量其实是架上+架下合计，单独显示容易误导，所以架下这里只提示"去这个库位找"） */
+/* 把一批库存行按 架上/架下 分组显示成小圆角标签；架下那个数字标成"总库存"
+   （产品汇总表里导入的数量其实是架上+架下合计，不是这个库位单独的库存，如实标注避免误解） */
 function zoneGroupedPillsHtml(rows){
   const onShelf = rows.filter(r=>r.zone!=='架下');
   const reserve = rows.filter(r=>r.zone==='架下');
@@ -751,7 +751,7 @@ function zoneGroupedPillsHtml(rows){
     html += '架上：' + onShelf.map(r=>`<span class="pill">${escapeHtml(r.location_code)} × ${r.quantity}</span>`).join('');
   }
   if(reserve.length){
-    html += (onShelf.length? '<br/>':'') + '💡架下：' + reserve.map(r=>`<span class="pill">${escapeHtml(r.location_code)}</span>`).join('');
+    html += (onShelf.length? '<br/>':'') + '💡架下（总库存）：' + reserve.map(r=>`<span class="pill">${escapeHtml(r.location_code)} × ${r.quantity}</span>`).join('');
   }
   if(!onShelf.length && !reserve.length) html = '暂无库存记录';
   return html;
@@ -807,18 +807,19 @@ async function doSearch(){
       });
       return h + '</tbody></table>';
     };
-    // 架下的数量其实是架上+架下合计，单独显示容易误导，这里只列条码+库位，不显示数量
-    const sectionNoQty = (title, list)=>{
+    // 架下导入的数量其实是"架上+架下"的合计，标成"数量"容易被当成这个库位单独的库存，
+    // 所以这里改叫"总库存"，如实反映这个数字的含义
+    const sectionTotalStock = (title, list)=>{
       if(!list.length) return '';
       let h = `<div class="muted" style="margin:10px 0 4px;font-weight:600;">${title}</div>`;
-      h += `<table><thead><tr><th>条码</th><th>库位</th></tr></thead><tbody>`;
+      h += `<table><thead><tr><th>条码</th><th>总库存</th><th>库位</th></tr></thead><tbody>`;
       list.forEach(r=>{
-        h += `<tr><td>${escapeHtml(r.barcode)}</td><td>${escapeHtml(r.location_code)}</td></tr>`;
+        h += `<tr><td>${escapeHtml(r.barcode)}</td><td>${r.quantity}</td><td>${escapeHtml(r.location_code)}</td></tr>`;
       });
       return h + '</tbody></table>';
     };
     let html = section('🅰️ 架上', onShelf);
-    html += sectionNoQty('💡 架下', reserve);
+    html += sectionTotalStock('💡 架下', reserve);
     resultEl.innerHTML = html;
   }catch(e){
     resultEl.innerHTML = `<div class="empty">查询出错：${e.message}</div>`;
